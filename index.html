@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>365 안심돌봄 Premium v15</title>
+    <title>365 안심돌봄 v15</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -11,281 +11,183 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;900&display=swap');
-        body { font-family: 'Pretendard', sans-serif; -webkit-tap-highlight-color: transparent; letter-spacing: -0.03em; }
-        .glass-header { background: rgba(248, 250, 252, 0.8); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
-        .card-shadow { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.04); }
+        body { font-family: 'Pretendard', sans-serif; letter-spacing: -0.03em; -webkit-tap-highlight-color: transparent; }
         .btn-gradient { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); }
-        input:focus, select:focus { background-color: #ffffff !important; box-shadow: inset 0 0 0 2px #2563eb; outline: none; }
+        .card-shadow { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04); }
         .loading-spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .bottom-nav-safe { padding-bottom: env(safe-area-inset-bottom); }
     </style>
 </head>
-<body class="bg-[#F8FAFC] text-slate-900">
+<body class="bg-[#F8FAFC]">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // ★★★ 여기에 본인의 구글 웹 앱 URL을 입력하세요 ★★★
+        // ★★★ 여기에 복사한 구글 배포 URL을 넣으세요 ★★★
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyEgpR6_vuxAhCzG3ToKD0XHoOhIEJFYbbFlFN0V3BjcT1o7swYTJI4muVP0RiomEsg/exec";
 
-        function CareSystemV15() {
-            const [staffs, setStaffs] = useState(() => JSON.parse(localStorage.getItem('d15_staffs')) || []);
-            const [workers, setWorkers] = useState(() => JSON.parse(localStorage.getItem('d15_workers')) || []);
-            const [elders, setElders] = useState(() => JSON.parse(localStorage.getItem('d15_elders')) || []);
-            const [logs, setLogs] = useState(() => JSON.parse(localStorage.getItem('d15_logs')) || []);
+        function App() {
+            const [staffs, setStaffs] = useState(() => JSON.parse(localStorage.getItem('staffs')) || []);
+            const [workers, setWorkers] = useState(() => JSON.parse(localStorage.getItem('workers')) || []);
+            const [elders, setElders] = useState(() => JSON.parse(localStorage.getItem('elders')) || []);
+            const [logs, setLogs] = useState(() => JSON.parse(localStorage.getItem('logs')) || []);
             const [activeTab, setActiveTab] = useState('home');
-            const [toast, setToast] = useState({ show: false, msg: '' });
             const [isSyncing, setIsSyncing] = useState(false);
+            const [toast, setToast] = useState({ show: false, msg: '' });
 
             useEffect(() => {
-                localStorage.setItem('d15_staffs', JSON.stringify(staffs));
-                localStorage.setItem('d15_workers', JSON.stringify(workers));
-                localStorage.setItem('d15_elders', JSON.stringify(elders));
-                localStorage.setItem('d15_logs', JSON.stringify(logs));
+                localStorage.setItem('staffs', JSON.stringify(staffs));
+                localStorage.setItem('workers', JSON.stringify(workers));
+                localStorage.setItem('elders', JSON.stringify(elders));
+                localStorage.setItem('logs', JSON.stringify(logs));
             }, [staffs, workers, elders, logs]);
 
             const showToast = (msg) => {
                 setToast({ show: true, msg });
-                setTimeout(() => setToast({ show: false }), 2500);
+                setTimeout(() => setToast({ show: false }), 2000);
             };
 
-            // [POST] 데이터 전송
-            const syncToGoogle = async (data) => {
-                if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("URL을_입력")) return;
+            const syncData = async () => {
+                if (!GOOGLE_SCRIPT_URL.startsWith("http")) return alert("URL을 먼저 설정해주세요.");
                 setIsSyncing(true);
                 try {
-                    await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
-                } catch (e) { console.error(e); }
+                    const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getData`);
+                    const json = await res.json();
+                    if (json.status === 'success') {
+                        setStaffs(json.data.staffs);
+                        setWorkers(json.data.workers);
+                        setElders(json.data.elders);
+                        showToast("동기화 완료!");
+                    }
+                } catch (e) { showToast("연결 실패"); }
                 finally { setIsSyncing(false); }
             };
 
-            // [GET] 데이터 불러오기
-            const fetchDataFromGoogle = async () => {
-                if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("URL을_입력")) {
-                    alert("구글 스크립트 URL을 먼저 설정해주세요.");
-                    return;
-                }
-                setIsSyncing(true);
-                showToast("시트 데이터를 가져오는 중...");
-                try {
-                    const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getData`);
-                    const result = await response.json();
-                    if (result.status === 'success') {
-                        setStaffs(result.data.staffs || []);
-                        setWorkers(result.data.workers || []);
-                        setElders(result.data.elders || []);
-                        showToast("데이터 동기화 완료!");
-                    }
-                } catch (e) {
-                    console.error(e);
-                    showToast("동기화 실패. 인터넷을 확인하세요.");
-                } finally {
-                    setIsSyncing(false);
-                }
+            const saveLog = async (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.target);
+                const data = {
+                    sheetName: 'logs',
+                    type: fd.get('type'),
+                    date: fd.get('date'),
+                    targetName: fd.get('targetName'),
+                    provider: fd.get('provider'),
+                    destination: fd.get('destination'),
+                    purpose: fd.get('purpose'),
+                    dist: Number(fd.get('end')) - Number(fd.get('start')),
+                    isError: false
+                };
+                setLogs([data, ...logs]);
+                fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
+                showToast("기록 완료");
+                setActiveTab('home');
             };
 
-            // 입력 오류 처리
-            const markAsError = async (index) => {
-                if(!confirm("이 기록을 '입력오류'로 처리할까요?")) return;
-                const updatedLogs = [...logs];
-                updatedLogs[index].purpose = "[입력오류] " + (updatedLogs[index].purpose || "");
-                updatedLogs[index].isError = true;
-                setLogs(updatedLogs);
-                await syncToGoogle({ ...updatedLogs[index], sheetName: 'logs', type: '입력오류' });
-                showToast("오류 처리 완료");
-            };
-
-            const Home = () => (
-                <div className="p-6 pb-36 animate-in fade-in duration-500">
-                    <header className="flex justify-between items-end mb-8">
-                        <div>
-                            <p className="text-blue-600 font-black text-xs uppercase tracking-[0.2em] mb-1">Jeongeup Dasom</p>
-                            <h2 className="text-3xl font-black tracking-tighter text-slate-900">365 안심돌봄</h2>
-                        </div>
-                        <button onClick={fetchDataFromGoogle} className={`w-10 h-10 rounded-2xl flex items-center justify-center bg-white card-shadow ${isSyncing ? 'text-blue-500' : 'text-slate-400'}`}>
-                            <i className={`fas fa-sync-alt ${isSyncing ? 'loading-spin' : ''}`}></i>
-                        </button>
-                    </header>
-                    <div className="space-y-4">
-                        <h3 className="text-sm font-black text-slate-800 px-2">최근 활동 로그</h3>
-                        {logs.length === 0 ? (
-                            <div className="text-center py-20 text-slate-300 text-sm">표시할 기록이 없습니다.</div>
-                        ) : (
-                            logs.slice(0, 10).map((l, i) => (
-                                <div key={i} className={`bg-white p-5 rounded-[2rem] border card-shadow flex flex-col gap-3 ${l.isError ? 'opacity-50 grayscale' : 'border-white'}`}>
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-xs ${l.isError ? 'bg-slate-100 text-slate-400' : l.type==='병원'?'bg-blue-100 text-blue-600':'bg-slate-100 text-slate-600'}`}>
-                                                <i className={`fas ${l.isError ? 'fa-exclamation-triangle' : l.type==='병원'?'fa-hospital':'fa-car'}`}></i>
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-800">{l.targetName} {l.isError && <span className="text-rose-500 text-[10px] font-black">[오류]</span>}</p>
-                                                <p className="text-[10px] text-slate-400 font-medium">{l.date} · {l.provider}</p>
-                                            </div>
-                                        </div>
-                                        <p className="text-xs font-black text-slate-600">+{l.dist}km</p>
-                                    </div>
-                                    {!l.isError && <button onClick={() => markAsError(i)} className="self-end text-[10px] font-bold text-rose-500 bg-rose-50 px-3 py-1.5 rounded-full">입력오류 처리</button>}
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            );
-
-            const RecordForm = () => {
-                const [type, setType] = useState('병원');
-                return (
-                    <div className="p-6 pb-36 animate-in slide-in-from-bottom-10 duration-500">
-                        <h2 className="text-2xl font-black mb-8">서비스 기록</h2>
-                        <form onSubmit={async (e) => {
-                            e.preventDefault();
-                            const formData = new FormData(e.target);
-                            const logData = {
-                                sheetName: 'logs',
-                                type: formData.get('type'),
-                                date: formData.get('date'),
-                                targetName: formData.get('targetName'),
-                                provider: formData.get('provider'),
-                                destination: formData.get('destination'),
-                                purpose: formData.get('purpose') || '-',
-                                dist: parseInt(formData.get('endDist')) - parseInt(formData.get('startDist')),
-                                isError: false
-                            };
-                            setLogs([logData, ...logs]);
-                            await syncToGoogle(logData);
-                            showToast("활동이 저장되었습니다.");
-                            setActiveTab('home');
-                        }} className="space-y-4">
-                            <div className="flex bg-slate-200/50 p-1.5 rounded-[1.8rem] mb-6">
-                                <button type="button" onClick={()=>setType('병원')} className={`flex-1 py-3.5 rounded-[1.4rem] text-sm font-bold ${type==='병원'?'bg-white text-blue-600 shadow-md':'text-slate-500'}`}>어르신 병원</button>
-                                <button type="button" onClick={()=>setType('이동')} className={`flex-1 py-3.5 rounded-[1.4rem] text-sm font-bold ${type==='이동'?'bg-white text-slate-800 shadow-md':'text-slate-500'}`}>보호사 이동</button>
-                                <input type="hidden" name="type" value={type} />
-                            </div>
-                            <div className="bg-white p-7 rounded-[2.5rem] card-shadow border border-white space-y-5">
-                                <select name="provider" required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-none appearance-none">
-                                    <option value="">수행인력 선택</option>
-                                    {staffs.map((s, i) => <option key={i} value={s.name}>{s.name} ({s.role})</option>)}
-                                </select>
-                                <select name="targetName" required className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-blue-600 border-none appearance-none">
-                                    <option value="">대상 선택</option>
-                                    {type==='병원' ? elders.map((e, i) => <option key={i} value={e.name}>{e.name}</option>) : workers.map((w, i) => <option key={i} value={w.name}>{w.name}</option>)}
-                                </select>
-                                <div className="space-y-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 ml-1">방문 일자</label>
-                                        <input name="date" type="date" required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-none" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 ml-1">방문 목적지</label>
-                                        <input name="destination" placeholder="장소명을 입력하세요" required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-none" />
-                                    </div>
-                                </div>
-                                <input name="purpose" placeholder="비고/특이사항" className="w-full bg-slate-50 p-4 rounded-2xl border-none" />
-                            </div>
-                            <div className="bg-slate-900 p-7 rounded-[2.5rem] grid grid-cols-2 gap-4">
-                                <input name="startDist" type="number" placeholder="출발(km)" required className="bg-slate-800 text-white p-4 rounded-2xl border-none font-bold" />
-                                <input name="endDist" type="number" placeholder="도착(km)" required className="bg-slate-800 text-white p-4 rounded-2xl border-none font-bold" />
-                            </div>
-                            <button className="w-full btn-gradient text-white py-5 rounded-[2.2rem] font-black text-lg shadow-xl shadow-blue-100">활동 저장하기</button>
-                        </form>
-                    </div>
-                );
-            };
-
-            const Manage = () => {
-                const [mTab, setMTab] = useState('staff');
-                const [showAdd, setShowAdd] = useState(false);
-                return (
-                    <div className="p-6 pb-36">
-                        <div className="flex justify-between items-center mb-8">
-                            <h2 className="text-2xl font-black">자원 관리</h2>
-                            <div className="flex gap-2">
-                                <button onClick={fetchDataFromGoogle} className="w-12 h-12 bg-white text-blue-600 rounded-2xl flex items-center justify-center card-shadow">
-                                    <i className={`fas fa-download ${isSyncing ? 'animate-bounce' : ''}`}></i>
-                                </button>
-                                <button onClick={()=>setShowAdd(!showAdd)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${showAdd ? 'bg-slate-800 text-white rotate-45' : 'bg-white text-blue-600 card-shadow'}`}><i className="fas fa-plus"></i></button>
-                            </div>
-                        </div>
-                        <div className="flex bg-slate-200/50 p-1 rounded-2xl mb-6 gap-1">
-                            {['staff', 'worker', 'elder'].map(t => (
-                                <button key={t} onClick={()=>setMTab(t)} className={`flex-1 py-3 px-1 rounded-xl text-[10px] font-black ${mTab===t?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>{t==='staff'?'수행인력':t==='worker'?'보호사':'어르신'}</button>
-                            ))}
-                        </div>
-                        {showAdd && (
-                            <form onSubmit={async (e) => {
-                                e.preventDefault();
-                                const formData = new FormData(e.target);
-                                const infoData = {
-                                    sheetName: mTab==='staff'?'staffs':mTab==='worker'?'workers':'elders',
-                                    name: formData.get('pName'),
-                                    phone: formData.get('pPhone'),
-                                    gender: formData.get('pGender'),
-                                    birth: formData.get('pBirth'),
-                                    role: formData.get('pRole') || '-'
-                                };
-                                if(mTab==='staff') setStaffs([infoData, ...staffs]);
-                                else if(mTab==='worker') setWorkers([infoData, ...workers]);
-                                else setElders([infoData, ...elders]);
-                                await syncToGoogle(infoData);
-                                setShowAdd(false);
-                                e.target.reset();
-                                showToast("성공적으로 등록되었습니다.");
-                            }} className="bg-white p-7 rounded-[2.5rem] card-shadow mb-8 space-y-4 border border-white">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <input name="pName" placeholder="성함" required className="bg-slate-50 p-4 rounded-2xl border-none font-bold" />
-                                    <select name="pGender" required className="bg-slate-50 p-4 rounded-2xl border-none font-bold">
-                                        <option value="남">남성</option>
-                                        <option value="여">여성</option>
-                                    </select>
-                                </div>
-                                <input name="pPhone" placeholder="연락처" required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold" />
-                                <input name="pBirth" type="date" required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-400" />
-                                <button className="w-full btn-gradient text-white py-4 rounded-2xl font-black">새 정보 등록</button>
-                            </form>
-                        )}
-                        <div className="space-y-3">
-                            {(mTab==='staff'?staffs:mTab==='worker'?workers:elders).map((item, i) => (
-                                <div key={i} className="bg-white p-5 rounded-[2rem] flex justify-between items-center card-shadow border border-white">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-11 h-11 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 font-black uppercase text-xs">{item.name[0]}</div>
-                                        <div>
-                                            <p className="font-black text-slate-800 text-sm">{item.name} <span className="text-[10px] font-normal text-slate-400">({item.gender})</span></p>
-                                            <p className="text-[11px] text-blue-600 font-bold">{item.phone}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <a href={`tel:${item.phone}`} className="w-9 h-9 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-sm"><i className="fas fa-phone"></i></a>
-                                        <button onClick={()=>{if(confirm("삭제할까요?")){
-                                            if(mTab==='staff') setStaffs(staffs.filter((_,idx)=>idx!==i));
-                                            else if(mTab==='worker') setWorkers(workers.filter((_,idx)=>idx!==i));
-                                            else setElders(elders.filter((_,idx)=>idx!==i));
-                                        }}} className="w-9 h-9 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-sm"><i className="fas fa-trash-alt"></i></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                );
+            const markError = (idx) => {
+                if (!confirm("오류로 기록할까요?")) return;
+                const newLogs = [...logs];
+                newLogs[idx].isError = true;
+                newLogs[idx].purpose = "[입력오류] " + newLogs[idx].purpose;
+                setLogs(newLogs);
+                fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({...newLogs[idx], sheetName:'logs'}) });
+                showToast("오류 처리됨");
             };
 
             return (
-                <div className="max-w-md mx-auto min-h-screen bg-[#F8FAFC] relative">
-                    <main>{activeTab === 'home' && <Home />}{activeTab === 'record' && <RecordForm />}{activeTab === 'manage' && <Manage />}</main>
-                    <nav className="fixed bottom-0 left-0 right-0 glass-header border-t border-slate-100 flex justify-around items-center bottom-nav-safe z-50 rounded-t-[2.5rem] px-8">
-                        <button onClick={()=>setActiveTab('home')} className={`py-7 flex-1 flex flex-col items-center gap-1 ${activeTab==='home'?'text-blue-600':'text-slate-300'}`}><i className="fas fa-house-chimney text-lg"></i></button>
-                        <button onClick={()=>setActiveTab('record')} className="flex-1 flex flex-col items-center -translate-y-10 transition-transform active:scale-90"><div className="btn-gradient text-white w-16 h-16 rounded-[1.8rem] shadow-2xl flex items-center justify-center text-2xl"><i className="fas fa-plus"></i></div></button>
-                        <button onClick={()=>setActiveTab('manage')} className={`py-7 flex-1 flex flex-col items-center gap-1 ${activeTab==='manage'?'text-blue-600':'text-slate-300'}`}><i className="fas fa-address-book text-lg"></i></button>
+                <div className="max-w-md mx-auto min-h-screen relative pb-24">
+                    {/* Header */}
+                    <div className="p-6 flex justify-between items-center">
+                        <div>
+                            <h1 className="text-2xl font-black text-slate-900 tracking-tighter">365 안심돌봄</h1>
+                            <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">Premium v15</p>
+                        </div>
+                        <button onClick={syncData} className={`w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center ${isSyncing ? 'text-blue-500' : 'text-slate-400'}`}>
+                            <i className={`fas fa-sync-alt ${isSyncing ? 'loading-spin' : ''}`}></i>
+                        </button>
+                    </div>
+
+                    {activeTab === 'home' && (
+                        <div className="p-6 space-y-4">
+                            <h2 className="text-sm font-black text-slate-800">최근 기록</h2>
+                            {logs.map((l, i) => (
+                                <div key={i} className={`bg-white p-5 rounded-[2rem] card-shadow border border-white ${l.isError ? 'opacity-40 grayscale' : ''}`}>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="font-bold text-slate-800">{l.targetName} <span className="text-[10px] text-slate-400">{l.type}</span></p>
+                                            <p className="text-[10px] text-slate-400">{l.date} · {l.provider}</p>
+                                            <p className="text-xs mt-2 text-slate-600">{l.destination}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs font-black text-blue-600">+{l.dist}km</p>
+                                            {!l.isError && <button onClick={()=>markError(i)} className="text-[10px] text-rose-400 mt-4 underline">오류신고</button>}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {activeTab === 'record' && (
+                        <div className="p-6">
+                            <form onSubmit={saveLog} className="space-y-4">
+                                <div className="bg-white p-6 rounded-[2.5rem] card-shadow space-y-4">
+                                    <select name="type" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none appearance-none">
+                                        <option value="병원동행">병원 동행</option>
+                                        <option value="인력이동">인력 이동</option>
+                                    </select>
+                                    <select name="provider" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none appearance-none">
+                                        <option value="">수행 인력 선택</option>
+                                        {staffs.map((s,i)=><option key={i} value={s.name}>{s.name} ({s.role})</option>)}
+                                    </select>
+                                    <select name="targetName" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-blue-600 border-none appearance-none">
+                                        <option value="">대상자 선택</option>
+                                        {[...elders, ...workers].map((e,i)=><option key={i} value={e.name}>{e.name}</option>)}
+                                    </select>
+                                    <input type="date" name="date" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none" />
+                                    <input name="destination" placeholder="목적지 (병원/가정 등)" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none" />
+                                    <input name="purpose" placeholder="비고/특이사항" className="w-full p-4 bg-slate-50 rounded-2xl border-none" />
+                                </div>
+                                <div className="bg-slate-900 p-6 rounded-[2.5rem] grid grid-cols-2 gap-4">
+                                    <input type="number" name="start" placeholder="출발(km)" required className="bg-slate-800 text-white p-4 rounded-xl border-none font-bold" />
+                                    <input type="number" name="end" placeholder="도착(km)" required className="bg-slate-800 text-white p-4 rounded-xl border-none font-bold" />
+                                </div>
+                                <button type="submit" className="w-full btn-gradient text-white py-5 rounded-[2rem] font-black text-lg shadow-lg shadow-blue-200">기록 저장</button>
+                            </form>
+                        </div>
+                    )}
+
+                    {activeTab === 'manage' && (
+                        <div className="p-6 space-y-4">
+                            <h2 className="text-xl font-black">인원 관리</h2>
+                            <p className="text-xs text-slate-400">데이터가 비어있다면 우측 상단 동기화 버튼을 누르세요.</p>
+                            {['staffs','workers','elders'].map(cat => (
+                                <div key={cat} className="space-y-2">
+                                    <p className="text-[10px] font-black text-blue-500 uppercase mt-4">{cat}</p>
+                                    {(cat==='staffs'?staffs:cat==='workers'?workers:elders).map((p,i)=>(
+                                        <div key={i} className="bg-white p-4 rounded-2xl shadow-sm flex justify-between items-center">
+                                            <span className="font-bold">{p.name}</span>
+                                            <a href={`tel:${p.phone}`} className="text-emerald-500"><i className="fas fa-phone-alt"></i></a>
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Bottom Nav */}
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t flex justify-around p-4 rounded-t-[2rem]">
+                        <button onClick={()=>setActiveTab('home')} className={activeTab==='home'?'text-blue-600':'text-slate-300'}><i className="fas fa-home text-xl"></i></button>
+                        <button onClick={()=>setActiveTab('record')} className="bg-blue-600 text-white w-12 h-12 rounded-2xl flex items-center justify-center -translate-y-8 shadow-lg shadow-blue-200"><i className="fas fa-plus"></i></button>
+                        <button onClick={()=>setActiveTab('manage')} className={activeTab==='manage'?'text-blue-600':'text-slate-300'}><i className="fas fa-users text-xl"></i></button>
                     </nav>
-                    {toast.show && <div className="fixed bottom-32 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-8 py-3.5 rounded-full text-[11px] font-bold z-[100] animate-bounce shadow-2xl">{toast.msg}</div>}
+
+                    {toast.show && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-2 rounded-full text-xs font-bold z-50 animate-bounce">{toast.msg}</div>}
                 </div>
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<CareSystemV15 />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
