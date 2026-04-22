@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>365 안심돌봄 Premium v13</title>
+    <title>365 안심돌봄 Premium v14</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -15,6 +15,8 @@
         .glass-header { background: rgba(248, 250, 252, 0.8); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
         .card-shadow { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.04); }
         .btn-gradient { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); }
+        /* 모바일에서 입력창 포커스 시 배경색 변화 */
+        input:focus, select:focus { background-color: #ffffff !important; box-shadow: inset 0 0 0 2px #2563eb; outline: none; }
     </style>
 </head>
 <body class="bg-[#F8FAFC] text-slate-900">
@@ -23,23 +25,22 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // ★★★ 본인의 구글 웹 앱 URL을 입력하세요 ★★★
-        const GOOGLE_SCRIPT_URL = "https://drive.google.com/file/d/1tUdQbyZpYEAIrketfZ_19qRKdLhlBlaz/view?usp=drive_link";
+        const GOOGLE_SCRIPT_URL = "여기에_URL을_입력하세요";
 
-        function CareSystemV13() {
-            const [staffs, setStaffs] = useState(() => JSON.parse(localStorage.getItem('d13_staffs')) || []);
-            const [workers, setWorkers] = useState(() => JSON.parse(localStorage.getItem('d13_workers')) || []);
-            const [elders, setElders] = useState(() => JSON.parse(localStorage.getItem('d13_elders')) || []);
-            const [logs, setLogs] = useState(() => JSON.parse(localStorage.getItem('d13_logs')) || []);
+        function CareSystemV14() {
+            const [staffs, setStaffs] = useState(() => JSON.parse(localStorage.getItem('d14_staffs')) || []);
+            const [workers, setWorkers] = useState(() => JSON.parse(localStorage.getItem('d14_workers')) || []);
+            const [elders, setElders] = useState(() => JSON.parse(localStorage.getItem('d14_elders')) || []);
+            const [logs, setLogs] = useState(() => JSON.parse(localStorage.getItem('d14_logs')) || []);
             const [activeTab, setActiveTab] = useState('home');
             const [toast, setToast] = useState({ show: false, msg: '' });
             const [isSyncing, setIsSyncing] = useState(false);
 
             useEffect(() => {
-                localStorage.setItem('d13_staffs', JSON.stringify(staffs));
-                localStorage.setItem('d13_workers', JSON.stringify(workers));
-                localStorage.setItem('d13_elders', JSON.stringify(elders));
-                localStorage.setItem('d13_logs', JSON.stringify(logs));
+                localStorage.setItem('d14_staffs', JSON.stringify(staffs));
+                localStorage.setItem('d14_workers', JSON.stringify(workers));
+                localStorage.setItem('d14_elders', JSON.stringify(elders));
+                localStorage.setItem('d14_logs', JSON.stringify(logs));
             }, [staffs, workers, elders, logs]);
 
             const showToast = (msg) => {
@@ -56,26 +57,13 @@
                 finally { setIsSyncing(false); }
             };
 
-            // 입력 오류 처리 함수
             const markAsError = async (index) => {
                 if(!confirm("이 기록을 '입력오류'로 처리할까요?")) return;
-                
                 const updatedLogs = [...logs];
-                const targetLog = updatedLogs[index];
-                
-                // 상태 변경
-                targetLog.purpose = "[입력오류] " + (targetLog.purpose || "");
-                targetLog.isError = true;
-                
+                updatedLogs[index].purpose = "[입력오류] " + (updatedLogs[index].purpose || "");
+                updatedLogs[index].isError = true;
                 setLogs(updatedLogs);
-                
-                // 구글 시트 전송 (구분값에 오류 표시)
-                await syncToGoogle({
-                    ...targetLog,
-                    sheetName: 'logs',
-                    type: '입력오류'
-                });
-                
+                await syncToGoogle({ ...updatedLogs[index], sheetName: 'logs', type: '입력오류' });
                 showToast("오류 처리 완료");
             };
 
@@ -88,51 +76,34 @@
                         </div>
                         <div className={`w-3 h-3 rounded-full ${isSyncing ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></div>
                     </header>
-
                     <div className="space-y-4">
-                        <div className="flex justify-between items-center px-2">
-                            <h3 className="text-sm font-black text-slate-800">최근 활동 로그</h3>
-                        </div>
-                        {logs.length === 0 ? (
-                            <div className="text-center py-10 text-slate-400 text-sm italic">기록된 활동이 없습니다.</div>
-                        ) : (
-                            logs.slice(0, 10).map((l, i) => (
-                                <div key={i} className={`bg-white p-5 rounded-[2rem] border card-shadow flex flex-col gap-3 ${l.isError ? 'opacity-50 grayscale' : 'border-white'}`}>
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-xs ${l.isError ? 'bg-slate-100 text-slate-400' : l.type==='병원'?'bg-blue-100 text-blue-600':'bg-slate-100 text-slate-600'}`}>
-                                                <i className={`fas ${l.isError ? 'fa-exclamation-triangle' : l.type==='병원'?'fa-hospital':'fa-car'}`}></i>
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-800">{l.targetName} {l.isError && <span className="text-rose-500 text-[10px]">[입력오류]</span>}</p>
-                                                <p className="text-[10px] text-slate-400 font-medium">{l.date} · {l.provider}</p>
-                                            </div>
+                        <h3 className="text-sm font-black text-slate-800 px-2">최근 활동 로그</h3>
+                        {logs.slice(0, 10).map((l, i) => (
+                            <div key={i} className={`bg-white p-5 rounded-[2rem] border card-shadow flex flex-col gap-3 ${l.isError ? 'opacity-50 grayscale' : 'border-white'}`}>
+                                <div className="flex justify-between items-start">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-xs ${l.isError ? 'bg-slate-100 text-slate-400' : l.type==='병원'?'bg-blue-100 text-blue-600':'bg-slate-100 text-slate-600'}`}>
+                                            <i className={`fas ${l.isError ? 'fa-exclamation-triangle' : l.type==='병원'?'fa-hospital':'fa-car'}`}></i>
                                         </div>
-                                        <p className="text-xs font-black text-slate-600">{l.dist}km</p>
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-800">{l.targetName} {l.isError && <span className="text-rose-500 text-[10px]">[오류]</span>}</p>
+                                            <p className="text-[10px] text-slate-400 font-medium">{l.date} · {l.provider}</p>
+                                        </div>
                                     </div>
-                                    {!l.isError && (
-                                        <button 
-                                            onClick={() => markAsError(i)}
-                                            className="self-end text-[10px] font-bold text-rose-500 bg-rose-50 px-3 py-1.5 rounded-full hover:bg-rose-100 transition-colors"
-                                        >
-                                            <i className="fas fa-eraser mr-1"></i> 입력오류 처리
-                                        </button>
-                                    )}
+                                    <p className="text-xs font-black text-slate-600">+{l.dist}km</p>
                                 </div>
-                            ))
-                        )}
+                                {!l.isError && <button onClick={() => markAsError(i)} className="self-end text-[10px] font-bold text-rose-500 bg-rose-50 px-3 py-1.5 rounded-full">입력오류 처리</button>}
+                            </div>
+                        ))}
                     </div>
                 </div>
             );
 
-            // ... (RecordForm, Manage 컴포넌트는 v12와 동일하지만 가독성을 위해 생략 또는 동일 유지 가능)
-            // 아래는 v12와 동일한 구조의 나머지 코드입니다.
-            
             const RecordForm = () => {
                 const [type, setType] = useState('병원');
                 return (
-                    <div className="p-6 pb-36">
-                        <h2 className="text-2xl font-black mb-8">서비스 기록</h2>
+                    <div className="p-6 pb-36 animate-in slide-in-from-bottom-10 duration-500">
+                        <h2 className="text-2xl font-black mb-8">서비스 기록하기</h2>
                         <form onSubmit={async (e) => {
                             e.preventDefault();
                             const formData = new FormData(e.target);
@@ -149,34 +120,57 @@
                             };
                             setLogs([logData, ...logs]);
                             await syncToGoogle(logData);
-                            showToast("저장되었습니다.");
+                            showToast("활동이 저장되었습니다.");
                             setActiveTab('home');
                         }} className="space-y-4">
                             <div className="flex bg-slate-200/50 p-1.5 rounded-[1.8rem] mb-6">
-                                <button type="button" onClick={()=>setType('병원')} className={`flex-1 py-3.5 rounded-[1.4rem] text-sm font-bold ${type==='병원'?'bg-white text-blue-600 shadow-md':'text-slate-500'}`}>병원동행</button>
-                                <button type="button" onClick={()=>setType('이동')} className={`flex-1 py-3.5 rounded-[1.4rem] text-sm font-bold ${type==='이동'?'bg-white text-slate-800 shadow-md':'text-slate-500'}`}>인력이동</button>
+                                <button type="button" onClick={()=>setType('병원')} className={`flex-1 py-3.5 rounded-[1.4rem] text-sm font-bold ${type==='병원'?'bg-white text-blue-600 shadow-md':'text-slate-500'}`}>어르신 병원</button>
+                                <button type="button" onClick={()=>setType('이동')} className={`flex-1 py-3.5 rounded-[1.4rem] text-sm font-bold ${type==='이동'?'bg-white text-slate-800 shadow-md':'text-slate-500'}`}>보호사 이동</button>
                                 <input type="hidden" name="type" value={type} />
                             </div>
-                            <div className="bg-white p-6 rounded-[2.5rem] card-shadow space-y-4">
-                                <select name="provider" required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-none appearance-none">
-                                    <option value="">수행인력 선택</option>
-                                    {staffs.map((s, i) => <option key={i} value={s.name}>{s.name} ({s.role})</option>)}
-                                </select>
-                                <select name="targetName" required className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-blue-600 border-none appearance-none">
-                                    <option value="">대상자 선택</option>
-                                    {type==='병원' ? elders.map((e, i) => <option key={i} value={e.name}>{e.name}</option>) : workers.map((w, i) => <option key={i} value={w.name}>{w.name}</option>)}
-                                </select>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input name="date" type="date" required className="bg-slate-50 p-4 rounded-2xl font-bold text-xs border-none" />
-                                    <input name="destination" placeholder="장소" required className="bg-slate-50 p-4 rounded-2xl font-bold text-xs border-none" />
+
+                            <div className="bg-white p-7 rounded-[2.5rem] card-shadow border border-white space-y-5">
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] font-black text-slate-400 ml-1 uppercase">수행 인력</label>
+                                    <select name="provider" required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-none appearance-none">
+                                        <option value="">수행인력 선택</option>
+                                        {staffs.map((s, i) => <option key={i} value={s.name}>{s.name} ({s.role})</option>)}
+                                    </select>
                                 </div>
-                                <input name="purpose" placeholder="목적/특이사항" className="w-full bg-slate-50 p-4 rounded-2xl border-none" />
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] font-black text-slate-400 ml-1 uppercase">대상자</label>
+                                    <select name="targetName" required className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-blue-600 border-none appearance-none">
+                                        <option value="">대상 선택</option>
+                                        {type==='병원' ? elders.map((e, i) => <option key={i} value={e.name}>{e.name} ({e.birth})</option>) : workers.map((w, i) => <option key={i} value={w.name}>{w.name} ({w.birth})</option>)}
+                                    </select>
+                                </div>
+                                
+                                {/* 일자와 목적지 레이아웃 수정: 상하 분리 배치 */}
+                                <div className="space-y-4 pt-2">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">방문 일자</label>
+                                        <input name="date" type="date" required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-none" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">방문 목적지</label>
+                                        <input name="destination" placeholder="장소명을 입력하세요" required className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-none" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] font-black text-slate-400 ml-1 uppercase">비고 (특이사항)</label>
+                                    <input name="purpose" placeholder="기타 내용을 입력하세요" className="w-full bg-slate-50 p-4 rounded-2xl border-none" />
+                                </div>
                             </div>
-                            <div className="bg-slate-900 p-6 rounded-[2.5rem] grid grid-cols-2 gap-3">
-                                <input name="startDist" type="number" placeholder="출발(km)" required className="bg-slate-800 p-4 rounded-xl text-white border-none" />
-                                <input name="endDist" type="number" placeholder="도착(km)" required className="bg-slate-800 p-4 rounded-xl text-white border-none" />
+
+                            <div className="bg-slate-900 p-7 rounded-[2.5rem] shadow-2xl space-y-4">
+                                <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">주행 거리 (km)</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <input name="startDist" type="number" placeholder="출발 거리" required className="bg-slate-800 text-white p-4 rounded-2xl font-bold border-none" />
+                                    <input name="endDist" type="number" placeholder="도착 거리" required className="bg-slate-800 text-white p-4 rounded-2xl font-bold border-none" />
+                                </div>
                             </div>
-                            <button className="w-full btn-gradient text-white py-5 rounded-[2.2rem] font-black text-lg shadow-xl shadow-blue-100">기록 저장하기</button>
+                            <button type="submit" className="w-full btn-gradient text-white py-5 rounded-[2.2rem] font-black text-lg shadow-xl shadow-blue-100 transition-transform active:scale-95">활동 내역 저장하기</button>
                         </form>
                     </div>
                 );
@@ -187,17 +181,13 @@
                 const [showAdd, setShowAdd] = useState(false);
                 return (
                     <div className="p-6 pb-36">
-                        <div className="flex justify-between items-center mb-6">
+                        <div className="flex justify-between items-center mb-8">
                             <h2 className="text-2xl font-black">자원 관리</h2>
-                            <button onClick={()=>setShowAdd(!showAdd)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${showAdd ? 'bg-slate-800 text-white rotate-45' : 'bg-white text-blue-600 card-shadow'}`}>
-                                <i className="fas fa-plus"></i>
-                            </button>
+                            <button onClick={()=>setShowAdd(!showAdd)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${showAdd ? 'bg-slate-800 text-white rotate-45' : 'bg-white text-blue-600 card-shadow'}`}><i className="fas fa-plus"></i></button>
                         </div>
                         <div className="flex bg-slate-200/50 p-1 rounded-2xl mb-6 gap-1">
                             {['staff', 'worker', 'elder'].map(t => (
-                                <button key={t} onClick={()=>setMTab(t)} className={`flex-1 py-3 px-1 rounded-xl text-[10px] font-black ${mTab===t?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>
-                                    {t==='staff'?'수행인력':t==='worker'?'보호사':'어르신'}
-                                </button>
+                                <button key={t} onClick={()=>setMTab(t)} className={`flex-1 py-3 px-1 rounded-xl text-[10px] font-black ${mTab===t?'bg-white text-blue-600 shadow-sm':'text-slate-400'}`}>{t==='staff'?'수행인력':t==='worker'?'보호사':'어르신'}</button>
                             ))}
                         </div>
                         {showAdd && (
@@ -205,7 +195,7 @@
                                 e.preventDefault();
                                 const formData = new FormData(e.target);
                                 const infoData = {
-                                    sheetName: mTab === 'staff' ? 'staffs' : mTab === 'worker' ? 'workers' : 'elders',
+                                    sheetName: mTab==='staff'?'staffs':mTab==='worker'?'workers':'elders',
                                     name: formData.get('pName'),
                                     phone: formData.get('pPhone'),
                                     gender: formData.get('pGender'),
@@ -218,35 +208,37 @@
                                 await syncToGoogle(infoData);
                                 setShowAdd(false);
                                 e.target.reset();
-                                showToast("등록 완료");
-                            }} className="bg-white p-6 rounded-[2rem] shadow-sm mb-6 space-y-3 border border-white">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input name="pName" placeholder="성함" required className="bg-slate-50 p-4 rounded-xl border-none font-bold" />
-                                    <select name="pGender" required className="bg-slate-50 p-4 rounded-xl border-none">
-                                        <option value="남">남</option>
-                                        <option value="여">여</option>
+                                showToast("성공적으로 등록되었습니다.");
+                            }} className="bg-white p-7 rounded-[2.5rem] card-shadow mb-8 space-y-4 border border-white">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <input name="pName" placeholder="성함" required className="bg-slate-50 p-4 rounded-2xl border-none font-bold" />
+                                    <select name="pGender" required className="bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-500">
+                                        <option value="남">남성</option>
+                                        <option value="여">여성</option>
                                     </select>
                                 </div>
-                                <input name="pPhone" placeholder="연락처" required className="w-full bg-slate-50 p-4 rounded-xl border-none" />
-                                <input name="pBirth" type="date" required className="w-full bg-slate-50 p-4 rounded-xl border-none" />
-                                <button className="w-full btn-gradient text-white py-4 rounded-xl font-black">정보 등록</button>
+                                <input name="pPhone" placeholder="연락처 (- 포함)" required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold" />
+                                <input name="pBirth" type="date" required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-400" />
+                                <button className="w-full btn-gradient text-white py-4 rounded-2xl font-black">정보 추가하기</button>
                             </form>
                         )}
                         <div className="space-y-3">
                             {(mTab==='staff'?staffs:mTab==='worker'?workers:elders).map((item, i) => (
                                 <div key={i} className="bg-white p-5 rounded-[2rem] flex justify-between items-center card-shadow border border-white">
-                                    <div>
-                                        <p className="font-black text-slate-800">{item.name} <span className="text-[10px] font-normal text-slate-400">({item.gender})</span></p>
-                                        <p className="text-[11px] text-blue-600 font-bold">{item.phone}</p>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 font-black">{item.name[0]}</div>
+                                        <div>
+                                            <p className="font-black text-slate-800">{item.name} <span className="text-[10px] font-normal text-slate-400">({item.gender})</span></p>
+                                            <p className="text-[11px] text-blue-600 font-bold">{item.phone}</p>
+                                        </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <a href={`tel:${item.phone}`} className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center"><i className="fas fa-phone"></i></a>
-                                        <button onClick={()=>{
-                                            if(!confirm("삭제할까요?")) return;
+                                        <a href={`tel:${item.phone}`} className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-sm"><i className="fas fa-phone"></i></a>
+                                        <button onClick={()=>{if(confirm("삭제할까요?")){
                                             if(mTab==='staff') setStaffs(staffs.filter((_,idx)=>idx!==i));
                                             else if(mTab==='worker') setWorkers(workers.filter((_,idx)=>idx!==i));
                                             else setElders(elders.filter((_,idx)=>idx!==i));
-                                        }} className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center"><i className="fas fa-trash"></i></button>
+                                        }}} className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-sm"><i className="fas fa-trash-alt"></i></button>
                                     </div>
                                 </div>
                             ))}
@@ -257,35 +249,19 @@
 
             return (
                 <div className="max-w-md mx-auto min-h-screen bg-[#F8FAFC] relative">
-                    <main>
-                        {activeTab === 'home' && <Home />}
-                        {activeTab === 'record' && <RecordForm />}
-                        {activeTab === 'manage' && <Manage />}
-                    </main>
+                    <main>{activeTab === 'home' && <Home />}{activeTab === 'record' && <RecordForm />}{activeTab === 'manage' && <Manage />}</main>
                     <nav className="fixed bottom-0 left-0 right-0 glass-header border-t border-slate-100 flex justify-around items-center bottom-nav-safe z-50 rounded-t-[2.5rem] px-8">
-                        <button onClick={()=>setActiveTab('home')} className={`py-7 flex-1 flex flex-col items-center gap-1 ${activeTab==='home'?'text-blue-600':'text-slate-300'}`}>
-                            <i className="fas fa-house-chimney text-lg"></i>
-                        </button>
-                        <button onClick={()=>setActiveTab('record')} className="flex-1 flex flex-col items-center -translate-y-10">
-                            <div className="btn-gradient text-white w-16 h-16 rounded-[1.8rem] shadow-2xl flex items-center justify-center text-2xl">
-                                <i className="fas fa-plus"></i>
-                            </div>
-                        </button>
-                        <button onClick={()=>setActiveTab('manage')} className={`py-7 flex-1 flex flex-col items-center gap-1 ${activeTab==='manage'?'text-blue-600':'text-slate-300'}`}>
-                            <i className="fas fa-address-book text-lg"></i>
-                        </button>
+                        <button onClick={()=>setActiveTab('home')} className={`py-7 flex-1 flex flex-col items-center gap-1 ${activeTab==='home'?'text-blue-600':'text-slate-300'}`}><i className="fas fa-house-chimney text-lg"></i></button>
+                        <button onClick={()=>setActiveTab('record')} className="flex-1 flex flex-col items-center -translate-y-10 transition-transform active:scale-90"><div className="btn-gradient text-white w-16 h-16 rounded-[1.8rem] shadow-2xl flex items-center justify-center text-2xl"><i className="fas fa-plus"></i></div></button>
+                        <button onClick={()=>setActiveTab('manage')} className={`py-7 flex-1 flex flex-col items-center gap-1 ${activeTab==='manage'?'text-blue-600':'text-slate-300'}`}><i className="fas fa-address-book text-lg"></i></button>
                     </nav>
-                    {toast.show && (
-                        <div className="fixed bottom-32 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-8 py-3 rounded-full text-[11px] font-bold z-[100] animate-bounce">
-                            {toast.msg}
-                        </div>
-                    )}
+                    {toast.show && <div className="fixed bottom-32 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-8 py-3.5 rounded-full text-[11px] font-bold z-[100] animate-bounce border border-white/10 shadow-2xl">{toast.msg}</div>}
                 </div>
             );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<CareSystemV13 />);
+        root.render(<CareSystemV14 />);
     </script>
 </body>
 </html>
