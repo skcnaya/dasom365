@@ -51,12 +51,33 @@
                 setTimeout(() => setToast({ show: false }), 2000);
             };
 
-            // 로그 오류 상태 토글
-            const toggleError = (index) => {
+            // 로그 오류 상태 토글 및 데이터베이스 업데이트
+            const toggleError = async (index) => {
                 const newLogs = [...logs];
-                newLogs[index].isError = !newLogs[index].isError;
+                const targetLog = newLogs[index];
+                
+                // 상태 반전
+                targetLog.isError = !targetLog.isError;
                 setLogs(newLogs);
-                showToast(newLogs[index].isError ? "오류 처리되었습니다." : "오류 처리가 취소되었습니다.");
+                showToast(targetLog.isError ? "오류 처리되었습니다." : "오류 처리가 취소되었습니다.");
+
+                // 구글 스프레드시트에 상태 업데이트 전송
+                try {
+                    await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({
+                            action: 'updateError',
+                            sheetName: 'logs',
+                            date: targetLog.date,
+                            targetName: targetLog.targetName,
+                            provider: targetLog.provider,
+                            isError: targetLog.isError
+                        })
+                    });
+                } catch (err) {
+                    console.error("업데이트 에러:", err);
+                }
             };
 
             // 데이터 동기화 (GET)
@@ -71,6 +92,7 @@
                         setStaffs(json.data.staffs || []);
                         setWorkers(json.data.workers || []);
                         setElders(json.data.elders || []);
+                        setLogs(json.data.logs || []); // 로그 데이터도 동기화
                         showToast("동기화 완료!");
                     }
                 } catch (e) { showToast("연결 실패"); }
@@ -95,7 +117,7 @@
                 else if (manageSubTab === 'workers') setWorkers([newPerson, ...workers]);
                 else setElders([newPerson, ...elders]);
 
-                // 서버 전송 (CORS 문제 방지를 위해 text/plain 사용)
+                // 서버 전송
                 fetch(GOOGLE_SCRIPT_URL, { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
