@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>365 안심돌봄 v15.2</title>
+    <title>365 안심돌봄 v15.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -22,9 +22,9 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useCallback } = React;
 
-        // ★★★ 본인의 구글 웹 앱 URL을 여기에 입력하세요 ★★★
+        // ★★★ 업데이트된 구글 웹 앱 URL ★★★
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbycZ8jnao0BW7YbRgkSko4jFn1N9ydQ4-wc5yTUOzjIoZ4XPy92KqFK21sWkUY_VcUqcQ/exec";
 
         function App() {
@@ -39,10 +39,10 @@
             const [isSyncing, setIsSyncing] = useState(false);
             const [toast, setToast] = useState({ show: false, msg: '' });
 
-            // 사진 업로드 관련 상태
             const [photoBase64, setPhotoBase64] = useState(null);
             const [photoPreview, setPhotoPreview] = useState(null);
 
+            // 로컬 스토리지 데이터 유지
             useEffect(() => {
                 localStorage.setItem('staffs', JSON.stringify(staffs));
                 localStorage.setItem('workers', JSON.stringify(workers));
@@ -55,7 +55,37 @@
                 setTimeout(() => setToast({ show: false }), 2000);
             };
 
-            // 사진 선택 및 압축 처리
+            // 데이터 동기화 (GET)
+            const syncData = useCallback(async () => {
+                if (!GOOGLE_SCRIPT_URL.startsWith("http")) return alert("URL을 설정해주세요.");
+                setIsSyncing(true);
+                showToast("데이터 동기화 중...");
+                try {
+                    const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getData`);
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        setStaffs(result.data.staffs || []);
+                        setWorkers(result.data.workers || []);
+                        setElders(result.data.elders || []);
+                        setLogs(result.data.logs || []);
+                        showToast("동기화 완료!");
+                    } else {
+                        showToast("데이터 로드 오류");
+                    }
+                } catch (e) {
+                    console.error("Sync error:", e);
+                    showToast("연결 실패");
+                } finally {
+                    setIsSyncing(false);
+                }
+            }, []);
+
+            // 초기 실행 시 자동 동기화
+            useEffect(() => {
+                syncData();
+            }, [syncData]);
+
             const handlePhotoChange = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -65,7 +95,7 @@
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        let MAX_WIDTH = 800; // 가로 최대 800px로 압축
+                        let MAX_WIDTH = 800;
                         let width = img.width;
                         let height = img.height;
 
@@ -80,11 +110,8 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
                         
-                        // 용량을 줄이기 위해 jpeg 70% 품질로 인코딩
                         const base64String = canvas.toDataURL('image/jpeg', 0.7);
-                        // 구글 서버에 보낼 순수 데이터 추출
                         setPhotoBase64(base64String.split(',')[1]);
-                        // 앱 화면에 띄울 미리보기 URL 세팅
                         setPhotoPreview(base64String);
                     };
                     img.src = event.target.result;
@@ -98,10 +125,10 @@
                 
                 targetLog.isError = !targetLog.isError;
                 setLogs(newLogs);
-                showToast(targetLog.isError ? "오류 처리되었습니다." : "오류 처리가 취소되었습니다.");
+                showToast(targetLog.isError ? "오류 표시됨" : "오류 취소됨");
 
                 try {
-                    await fetch(GOOGLE_SCRIPT_URL, {
+                    fetch(GOOGLE_SCRIPT_URL, {
                         method: 'POST',
                         mode: 'no-cors',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -115,26 +142,8 @@
                         })
                     });
                 } catch (err) {
-                    console.error("업데이트 에러:", err);
+                    console.error("Update error:", err);
                 }
-            };
-
-            const syncData = async () => {
-                if (!GOOGLE_SCRIPT_URL.startsWith("http")) return alert("URL을 설정해주세요.");
-                setIsSyncing(true);
-                showToast("데이터 불러오는 중...");
-                try {
-                    const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getData`);
-                    const json = await res.json();
-                    if (json.status === 'success') {
-                        setStaffs(json.data.staffs || []);
-                        setWorkers(json.data.workers || []);
-                        setElders(json.data.elders || []);
-                        setLogs(json.data.logs || []);
-                        showToast("동기화 완료!");
-                    }
-                } catch (e) { showToast("연결 실패"); }
-                finally { setIsSyncing(false); }
             };
 
             const handleAddPerson = async (e) => {
@@ -153,14 +162,18 @@
                 else if (manageSubTab === 'workers') setWorkers([newPerson, ...workers]);
                 else setElders([newPerson, ...elders]);
 
-                fetch(GOOGLE_SCRIPT_URL, { 
-                    method: 'POST', 
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(newPerson) 
-                }).catch(err => console.error('Error:', err));
+                try {
+                    fetch(GOOGLE_SCRIPT_URL, { 
+                        method: 'POST', 
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(newPerson) 
+                    });
+                    showToast("정보 저장 중...");
+                } catch (err) {
+                    console.error('Add person error:', err);
+                }
                 
-                showToast("등록되었습니다.");
                 setShowAddForm(false);
                 e.target.reset();
             };
@@ -178,23 +191,27 @@
                     purpose: fd.get('purpose') || '-',
                     dist: Number(fd.get('end')) - Number(fd.get('start')),
                     isError: false,
-                    photo: photoBase64, // 사진 데이터 추가
-                    photoUrl: photoPreview // 로컬 미리보기용 추가
+                    photo: photoBase64
                 };
-                setLogs([data, ...logs]);
                 
-                if(photoBase64) showToast("사진과 함께 기록 중...");
+                // 화면 즉시 업데이트
+                const newLogEntry = { ...data, photoUrl: photoPreview };
+                setLogs([newLogEntry, ...logs]);
                 
-                fetch(GOOGLE_SCRIPT_URL, { 
-                    method: 'POST', 
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(data) 
-                }).catch(err => console.error('Error:', err));
+                showToast("기록 업로드 중...");
                 
-                if(!photoBase64) showToast("기록 완료");
+                try {
+                    fetch(GOOGLE_SCRIPT_URL, { 
+                        method: 'POST', 
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(data) 
+                    });
+                } catch (err) {
+                    console.error('Save log error:', err);
+                    showToast("전송 실패");
+                }
                 
-                // 폼 초기화
                 setPhotoBase64(null);
                 setPhotoPreview(null);
                 setActiveTab('home');
@@ -203,12 +220,12 @@
             return (
                 <div className="max-w-md mx-auto min-h-screen relative pb-28 bg-[#F8FAFC]">
                     {/* 상단 헤더 */}
-                    <div className="p-6 flex justify-between items-center bg-white/50 backdrop-blur-md sticky top-0 z-40">
+                    <div className="p-6 flex justify-between items-center bg-white/50 backdrop-blur-md sticky top-0 z-40 border-b border-slate-100">
                         <div>
                             <h1 className="text-2xl font-black text-slate-900 tracking-tighter">365 안심돌봄</h1>
                             <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">Jeongeup Dasom</p>
                         </div>
-                        <button onClick={syncData} className={`w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center ${isSyncing ? 'text-blue-500' : 'text-slate-400'}`}>
+                        <button onClick={syncData} disabled={isSyncing} className={`w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center ${isSyncing ? 'text-blue-500 bg-blue-50' : 'text-slate-400'}`}>
                             <i className={`fas fa-sync-alt ${isSyncing ? 'loading-spin' : ''}`}></i>
                         </button>
                     </div>
@@ -218,25 +235,25 @@
                         <div className="p-6 space-y-4 animate-in fade-in duration-500">
                             <div className="flex justify-between items-center px-1">
                                 <h2 className="text-sm font-black text-slate-800">최근 활동 로그</h2>
-                                <span className="text-[10px] text-slate-400 font-bold">최근 10건</span>
+                                <span className="text-[10px] text-slate-400 font-bold">실시간 동기화</span>
                             </div>
                             {logs.length === 0 ? (
                                 <div className="text-center py-20 text-slate-300 text-sm font-medium bg-white rounded-[2rem] card-shadow border border-dashed">기록이 없습니다.</div>
                             ) : (
-                                logs.slice(0, 10).map((l, i) => (
+                                logs.slice(0, 20).map((l, i) => (
                                     <div key={i} className={`bg-white p-5 rounded-[2rem] card-shadow border border-white transition-all ${l.isError ? 'opacity-40 grayscale' : ''}`}>
                                         <div className="flex justify-between items-start">
                                             <div className="flex gap-3">
                                                 <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center text-xs shrink-0">
                                                     <i className={`fas ${l.type === '병원동행' ? 'fa-hospital' : 'fa-car'}`}></i>
                                                 </div>
-                                                <div>
+                                                <div className="overflow-hidden">
                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                        <p className={`font-bold text-sm ${l.isError ? 'line-through text-slate-500' : 'text-slate-800'}`}>{l.targetName}</p>
-                                                        {l.isError && <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-md font-black">입력 오류</span>}
+                                                        <p className={`font-bold text-sm truncate ${l.isError ? 'line-through text-slate-500' : 'text-slate-800'}`}>{l.targetName}</p>
+                                                        {l.isError && <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-md font-black shrink-0">입력 오류</span>}
                                                         {l.photoUrl && !l.isError && (
                                                             <a href={l.photoUrl} target="_blank" className="text-[10px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-md font-black flex items-center gap-1 active:scale-95 transition-transform">
-                                                                <i className="fas fa-image"></i> 사진
+                                                                <i className="fas fa-image"></i> 사진보기
                                                             </a>
                                                         )}
                                                     </div>
@@ -253,28 +270,31 @@
                                                 </button>
                                             </div>
                                         </div>
-                                        <p className="text-xs mt-3 text-slate-500 font-medium px-1"><i className="fas fa-map-marker-alt mr-1"></i>{l.destination}</p>
+                                        <p className="text-xs mt-3 text-slate-500 font-medium px-1 flex items-start gap-1">
+                                            <i className="fas fa-map-marker-alt mt-0.5 shrink-0"></i>
+                                            <span className="truncate">{l.destination}</span>
+                                        </p>
                                     </div>
                                 ))
                             )}
                         </div>
                     )}
 
-                    {/* 서비스 기록 폼 */}
+                    {/* 기록 폼 탭 */}
                     {activeTab === 'record' && (
                         <div className="p-6 animate-in slide-in-from-bottom-10 duration-500">
-                            <h2 className="text-2xl font-black mb-6">기록하기</h2>
+                            <h2 className="text-2xl font-black mb-6 text-slate-800">현장 서비스 기록</h2>
                             <form onSubmit={saveLog} className="space-y-4">
                                 <div className="bg-white p-7 rounded-[2.5rem] card-shadow border border-white space-y-5">
                                     <div className="flex bg-slate-100 p-1 rounded-2xl">
-                                        <select name="type" className="w-full bg-transparent p-3 font-bold text-center border-none appearance-none">
+                                        <select name="type" className="w-full bg-transparent p-3 font-bold text-center border-none appearance-none text-slate-800">
                                             <option value="병원동행">병원 동행</option>
                                             <option value="인력이동">인력 이동</option>
                                         </select>
                                     </div>
                                     <div className="space-y-4">
-                                        <select name="provider" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none appearance-none">
-                                            <option value="">수행 인력 선택</option>
+                                        <select name="provider" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none appearance-none text-slate-800">
+                                            <option value="">수수행 인력 선택</option>
                                             {staffs.map((s,i)=><option key={i} value={s.name}>{s.name} ({s.role})</option>)}
                                         </select>
                                         <select name="targetName" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-blue-600 border-none appearance-none">
@@ -283,54 +303,60 @@
                                         </select>
                                         <div className="grid grid-cols-1 gap-4">
                                             <div className="space-y-1">
-                                                <label className="text-[10px] font-bold text-slate-400 ml-2 uppercase">방문 일자</label>
-                                                <input type="date" name="date" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none" />
+                                                <label className="text-[10px] font-bold text-slate-400 ml-2 uppercase tracking-tighter">방문 날짜</label>
+                                                <input type="date" name="date" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none text-slate-800" defaultValue={new Date().toISOString().split('T')[0]} />
                                             </div>
                                             <div className="space-y-1">
-                                                <label className="text-[10px] font-bold text-slate-400 ml-2 uppercase">목적지</label>
-                                                <input name="destination" placeholder="장소명 입력" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none" />
+                                                <label className="text-[10px] font-bold text-slate-400 ml-2 uppercase tracking-tighter">행선지(목적지)</label>
+                                                <input name="destination" placeholder="장소명 입력" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none text-slate-800" />
                                             </div>
                                         </div>
 
-                                        {/* 현장 사진 업로드 UI */}
+                                        {/* 사진 촬영/업로드 영역 */}
                                         <div className="space-y-1">
-                                            <label className="text-[10px] font-bold text-slate-400 ml-2 uppercase">현장 사진 (선택)</label>
-                                            <div className="relative w-full h-28 bg-slate-50 rounded-2xl border-none flex flex-col items-center justify-center overflow-hidden transition-all">
+                                            <label className="text-[10px] font-bold text-slate-400 ml-2 uppercase tracking-tighter">현장 증빙 사진</label>
+                                            <div className="relative w-full h-32 bg-slate-50 rounded-2xl border-none flex flex-col items-center justify-center overflow-hidden ring-2 ring-slate-100 ring-inset">
                                                 {photoPreview ? (
                                                     <div className="relative w-full h-full">
                                                         <img src={photoPreview} className="w-full h-full object-cover opacity-90" alt="미리보기" />
-                                                        <button type="button" onClick={() => {setPhotoPreview(null); setPhotoBase64(null);}} className="absolute top-2 right-2 bg-slate-900/50 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs backdrop-blur-md">
+                                                        <button type="button" onClick={() => {setPhotoPreview(null); setPhotoBase64(null);}} className="absolute top-2 right-2 bg-slate-900/60 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs backdrop-blur-md">
                                                             <i className="fas fa-times"></i>
                                                         </button>
                                                     </div>
                                                 ) : (
                                                     <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors">
                                                         <i className="fas fa-camera text-2xl mb-2"></i>
-                                                        <span className="text-[10px] font-bold">사진 촬영 또는 첨부하기</span>
+                                                        <span className="text-[10px] font-bold">사진 촬영 또는 파일 첨부</span>
                                                         <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} className="hidden" />
                                                     </label>
                                                 )}
                                             </div>
                                         </div>
 
-                                        <input name="purpose" placeholder="비고 (선택사항)" className="w-full p-4 bg-slate-50 rounded-2xl border-none" />
+                                        <input name="purpose" placeholder="비고 (특이사항 또는 세부내용)" className="w-full p-4 bg-slate-50 rounded-2xl border-none text-slate-800" />
                                     </div>
                                 </div>
                                 <div className="bg-slate-900 p-7 rounded-[2.5rem] grid grid-cols-2 gap-4 shadow-xl">
-                                    <input type="number" name="start" placeholder="출발(km)" required className="bg-slate-800 text-white p-4 rounded-xl border-none font-bold placeholder:text-slate-600" />
-                                    <input type="number" name="end" placeholder="도착(km)" required className="bg-slate-800 text-white p-4 rounded-xl border-none font-bold placeholder:text-slate-600" />
+                                    <div className="space-y-1">
+                                        <span className="text-[9px] text-slate-500 font-bold ml-1 uppercase">시작 거리(km)</span>
+                                        <input type="number" name="start" placeholder="0" required className="w-full bg-slate-800 text-white p-4 rounded-xl border-none font-bold text-center" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[9px] text-slate-500 font-bold ml-1 uppercase">종료 거리(km)</span>
+                                        <input type="number" name="end" placeholder="0" required className="w-full bg-slate-800 text-white p-4 rounded-xl border-none font-bold text-center" />
+                                    </div>
                                 </div>
-                                <button type="submit" className="w-full btn-gradient text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-blue-200">기록 완료</button>
+                                <button type="submit" className="w-full btn-gradient text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-blue-200 active:scale-95 transition-transform">활동 데이터 전송</button>
                             </form>
                         </div>
                     )}
 
-                    {/* 자원 관리 (스테프/보호사/어르신) */}
+                    {/* 자원 관리 탭 */}
                     {activeTab === 'manage' && (
                         <div className="p-6 animate-in fade-in duration-500">
                             <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-2xl font-black">인원 관리</h2>
-                                <button onClick={() => setShowAddForm(!showAddForm)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${showAddForm ? 'bg-slate-800 text-white rotate-45' : 'bg-white text-blue-600 card-shadow'}`}>
+                                <h2 className="text-2xl font-black text-slate-800">인원DB 관리</h2>
+                                <button onClick={() => setShowAddForm(!showAddForm)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${showAddForm ? 'bg-slate-800 text-white rotate-45' : 'bg-white text-blue-600 card-shadow border border-slate-100'}`}>
                                     <i className="fas fa-plus"></i>
                                 </button>
                             </div>
@@ -345,18 +371,18 @@
 
                             {showAddForm && (
                                 <form onSubmit={handleAddPerson} className="bg-white p-6 rounded-[2.5rem] card-shadow border border-white mb-8 space-y-4 animate-in slide-in-from-top-5">
-                                    <p className="text-[10px] font-black text-blue-600 uppercase text-center mb-2">{manageSubTab} 신규 등록</p>
+                                    <p className="text-[10px] font-black text-blue-600 uppercase text-center mb-2">{manageSubTab} 신규 추가</p>
                                     <div className="grid grid-cols-2 gap-3">
-                                        <input name="name" placeholder="이름" required className="bg-slate-50 p-4 rounded-2xl border-none font-bold" />
-                                        <select name="gender" className="bg-slate-50 p-4 rounded-2xl border-none font-bold">
+                                        <input name="name" placeholder="성함" required className="bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-800" />
+                                        <select name="gender" className="bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-800">
                                             <option value="남">남성</option>
                                             <option value="여">여성</option>
                                         </select>
                                     </div>
-                                    <input name="phone" placeholder="연락처 (- 포함)" required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold" />
+                                    <input name="phone" placeholder="연락처 (- 포함)" required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-800" />
                                     <input name="birth" type="date" required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-400" />
-                                    <input name="role" placeholder="직함/역할 (예: 요양보호사)" className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold" />
-                                    <button className="w-full btn-gradient text-white py-4 rounded-2xl font-black">정보 저장하기</button>
+                                    <input name="role" placeholder="소속센터 또는 담당직무" className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-800" />
+                                    <button className="w-full btn-gradient text-white py-4 rounded-2xl font-black">데이터베이스 저장</button>
                                 </form>
                             )}
 
@@ -364,26 +390,33 @@
                                 {(manageSubTab === 'staffs' ? staffs : manageSubTab === 'workers' ? workers : elders).map((p, i) => (
                                     <div key={i} className="bg-white p-5 rounded-[2rem] flex justify-between items-center card-shadow border border-white">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-11 h-11 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-bold text-xs uppercase">{p.name[0]}</div>
-                                            <div>
-                                                <p className="font-bold text-slate-800 text-sm">{p.name} <span className="text-[10px] font-normal text-slate-400">({p.gender})</span></p>
-                                                <p className="text-[11px] text-blue-600 font-bold">{p.phone}</p>
+                                            <div className="w-11 h-11 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 font-bold text-xs uppercase shrink-0">{p.name?.[0]}</div>
+                                            <div className="overflow-hidden">
+                                                <p className="font-bold text-slate-800 text-sm truncate">{p.name} <span className="text-[10px] font-normal text-slate-400">({p.gender})</span></p>
+                                                <p className="text-[11px] text-blue-600 font-bold truncate">{p.phone}</p>
                                             </div>
                                         </div>
-                                        <a href={`tel:${p.phone}`} className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center"><i className="fas fa-phone-alt"></i></a>
+                                        <a href={`tel:${p.phone}`} className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-transform"><i className="fas fa-phone-alt"></i></a>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
 
+                    {/* 하단 탭 네비게이션 */}
                     <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-100 flex justify-around p-5 rounded-t-[2.5rem] z-50">
-                        <button onClick={() => setActiveTab('home')} className={`text-xl ${activeTab === 'home' ? 'text-blue-600' : 'text-slate-300'}`}><i className="fas fa-home"></i></button>
+                        <button onClick={() => setActiveTab('home')} className={`text-xl transition-colors ${activeTab === 'home' ? 'text-blue-600' : 'text-slate-300'}`}><i className="fas fa-home"></i></button>
                         <button onClick={() => setActiveTab('record')} className="bg-blue-600 text-white w-14 h-14 rounded-2xl flex items-center justify-center -translate-y-10 shadow-xl shadow-blue-200 active:scale-90 transition-transform"><i className="fas fa-plus text-xl"></i></button>
-                        <button onClick={() => setActiveTab('manage')} className={`text-xl ${activeTab === 'manage' ? 'text-blue-600' : 'text-slate-300'}`}><i className="fas fa-users"></i></button>
+                        <button onClick={() => setActiveTab('manage')} className={`text-xl transition-colors ${activeTab === 'manage' ? 'text-blue-600' : 'text-slate-300'}`}><i className="fas fa-users"></i></button>
                     </nav>
 
-                    {toast.show && <div className="fixed bottom-28 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full text-xs font-bold z-[100] animate-bounce shadow-2xl">{toast.msg}</div>}
+                    {/* 알림 토스트 */}
+                    {toast.show && (
+                        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-sm text-white px-6 py-3 rounded-full text-[11px] font-bold z-[100] animate-bounce shadow-2xl flex items-center gap-2 whitespace-nowrap">
+                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
+                            {toast.msg}
+                        </div>
+                    )}
                 </div>
             );
         }
