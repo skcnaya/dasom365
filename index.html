@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>365 안심돌봄 v15</title>
+    <title>365 안심돌봄 v15.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -24,7 +24,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // ★★★ 여기에 복사한 구글 배포 URL을 넣으세요 ★★★
+        // ★★★ 본인의 구글 웹 앱 URL을 여기에 입력하세요 ★★★
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyEgpR6_vuxAhCzG3ToKD0XHoOhIEJFYbbFlFN0V3BjcT1o7swYTJI4muVP0RiomEsg/exec";
 
         function App() {
@@ -32,7 +32,10 @@
             const [workers, setWorkers] = useState(() => JSON.parse(localStorage.getItem('workers')) || []);
             const [elders, setElders] = useState(() => JSON.parse(localStorage.getItem('elders')) || []);
             const [logs, setLogs] = useState(() => JSON.parse(localStorage.getItem('logs')) || []);
+            
             const [activeTab, setActiveTab] = useState('home');
+            const [manageSubTab, setManageSubTab] = useState('staffs'); // staffs, workers, elders
+            const [showAddForm, setShowAddForm] = useState(false);
             const [isSyncing, setIsSyncing] = useState(false);
             const [toast, setToast] = useState({ show: false, msg: '' });
 
@@ -48,22 +51,51 @@
                 setTimeout(() => setToast({ show: false }), 2000);
             };
 
+            // 데이터 동기화 (GET)
             const syncData = async () => {
-                if (!GOOGLE_SCRIPT_URL.startsWith("http")) return alert("URL을 먼저 설정해주세요.");
+                if (!GOOGLE_SCRIPT_URL.startsWith("http")) return alert("URL을 설정해주세요.");
                 setIsSyncing(true);
+                showToast("데이터 불러오는 중...");
                 try {
                     const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getData`);
                     const json = await res.json();
                     if (json.status === 'success') {
-                        setStaffs(json.data.staffs);
-                        setWorkers(json.data.workers);
-                        setElders(json.data.elders);
+                        setStaffs(json.data.staffs || []);
+                        setWorkers(json.data.workers || []);
+                        setElders(json.data.elders || []);
                         showToast("동기화 완료!");
                     }
                 } catch (e) { showToast("연결 실패"); }
                 finally { setIsSyncing(false); }
             };
 
+            // 인원 등록 (POST)
+            const handleAddPerson = async (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.target);
+                const newPerson = {
+                    sheetName: manageSubTab,
+                    name: fd.get('name'),
+                    phone: fd.get('phone'),
+                    gender: fd.get('gender'),
+                    birth: fd.get('birth'),
+                    role: fd.get('role') || '일반'
+                };
+
+                // 로컬 상태 업데이트
+                if (manageSubTab === 'staffs') setStaffs([newPerson, ...staffs]);
+                else if (manageSubTab === 'workers') setWorkers([newPerson, ...workers]);
+                else setElders([newPerson, ...elders]);
+
+                // 서버 전송
+                fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(newPerson) });
+                
+                showToast("등록되었습니다.");
+                setShowAddForm(false);
+                e.target.reset();
+            };
+
+            // 서비스 기록 저장 (POST)
             const saveLog = async (e) => {
                 e.preventDefault();
                 const fd = new FormData(e.target);
@@ -74,7 +106,7 @@
                     targetName: fd.get('targetName'),
                     provider: fd.get('provider'),
                     destination: fd.get('destination'),
-                    purpose: fd.get('purpose'),
+                    purpose: fd.get('purpose') || '-',
                     dist: Number(fd.get('end')) - Number(fd.get('start')),
                     isError: false
                 };
@@ -84,105 +116,157 @@
                 setActiveTab('home');
             };
 
-            const markError = (idx) => {
-                if (!confirm("오류로 기록할까요?")) return;
-                const newLogs = [...logs];
-                newLogs[idx].isError = true;
-                newLogs[idx].purpose = "[입력오류] " + newLogs[idx].purpose;
-                setLogs(newLogs);
-                fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({...newLogs[idx], sheetName:'logs'}) });
-                showToast("오류 처리됨");
-            };
-
             return (
-                <div className="max-w-md mx-auto min-h-screen relative pb-24">
-                    {/* Header */}
-                    <div className="p-6 flex justify-between items-center">
+                <div className="max-w-md mx-auto min-h-screen relative pb-28 bg-[#F8FAFC]">
+                    {/* 상단 헤더 */}
+                    <div className="p-6 flex justify-between items-center bg-white/50 backdrop-blur-md sticky top-0 z-40">
                         <div>
                             <h1 className="text-2xl font-black text-slate-900 tracking-tighter">365 안심돌봄</h1>
-                            <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">Premium v15</p>
+                            <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">Jeongeup Dasom</p>
                         </div>
-                        <button onClick={syncData} className={`w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center ${isSyncing ? 'text-blue-500' : 'text-slate-400'}`}>
+                        <button onClick={syncData} className={`w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center ${isSyncing ? 'text-blue-500' : 'text-slate-400'}`}>
                             <i className={`fas fa-sync-alt ${isSyncing ? 'loading-spin' : ''}`}></i>
                         </button>
                     </div>
 
+                    {/* 메인 홈 - 최근 기록 */}
                     {activeTab === 'home' && (
-                        <div className="p-6 space-y-4">
-                            <h2 className="text-sm font-black text-slate-800">최근 기록</h2>
-                            {logs.map((l, i) => (
-                                <div key={i} className={`bg-white p-5 rounded-[2rem] card-shadow border border-white ${l.isError ? 'opacity-40 grayscale' : ''}`}>
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <p className="font-bold text-slate-800">{l.targetName} <span className="text-[10px] text-slate-400">{l.type}</span></p>
-                                            <p className="text-[10px] text-slate-400">{l.date} · {l.provider}</p>
-                                            <p className="text-xs mt-2 text-slate-600">{l.destination}</p>
-                                        </div>
-                                        <div className="text-right">
+                        <div className="p-6 space-y-4 animate-in fade-in duration-500">
+                            <div className="flex justify-between items-center px-1">
+                                <h2 className="text-sm font-black text-slate-800">최근 활동 로그</h2>
+                                <span className="text-[10px] text-slate-400 font-bold">최근 10건</span>
+                            </div>
+                            {logs.length === 0 ? (
+                                <div className="text-center py-20 text-slate-300 text-sm font-medium bg-white rounded-[2rem] card-shadow border border-dashed">기록이 없습니다.</div>
+                            ) : (
+                                logs.slice(0, 10).map((l, i) => (
+                                    <div key={i} className={`bg-white p-5 rounded-[2rem] card-shadow border border-white ${l.isError ? 'opacity-40 grayscale' : ''}`}>
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex gap-3">
+                                                <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center text-xs">
+                                                    <i className={`fas ${l.type === '병원동행' ? 'fa-hospital' : 'fa-car'}`}></i>
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-slate-800 text-sm">{l.targetName}</p>
+                                                    <p className="text-[10px] text-slate-400 font-medium">{l.date} · {l.provider}</p>
+                                                </div>
+                                            </div>
                                             <p className="text-xs font-black text-blue-600">+{l.dist}km</p>
-                                            {!l.isError && <button onClick={()=>markError(i)} className="text-[10px] text-rose-400 mt-4 underline">오류신고</button>}
                                         </div>
+                                        <p className="text-xs mt-3 text-slate-500 font-medium px-1"><i className="fas fa-map-marker-alt mr-1"></i>{l.destination}</p>
                                     </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     )}
 
+                    {/* 서비스 기록 폼 */}
                     {activeTab === 'record' && (
-                        <div className="p-6">
+                        <div className="p-6 animate-in slide-in-from-bottom-10 duration-500">
+                            <h2 className="text-2xl font-black mb-6">기록하기</h2>
                             <form onSubmit={saveLog} className="space-y-4">
-                                <div className="bg-white p-6 rounded-[2.5rem] card-shadow space-y-4">
-                                    <select name="type" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none appearance-none">
-                                        <option value="병원동행">병원 동행</option>
-                                        <option value="인력이동">인력 이동</option>
-                                    </select>
-                                    <select name="provider" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none appearance-none">
-                                        <option value="">수행 인력 선택</option>
-                                        {staffs.map((s,i)=><option key={i} value={s.name}>{s.name} ({s.role})</option>)}
-                                    </select>
-                                    <select name="targetName" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-blue-600 border-none appearance-none">
-                                        <option value="">대상자 선택</option>
-                                        {[...elders, ...workers].map((e,i)=><option key={i} value={e.name}>{e.name}</option>)}
-                                    </select>
-                                    <input type="date" name="date" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none" />
-                                    <input name="destination" placeholder="목적지 (병원/가정 등)" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none" />
-                                    <input name="purpose" placeholder="비고/특이사항" className="w-full p-4 bg-slate-50 rounded-2xl border-none" />
+                                <div className="bg-white p-7 rounded-[2.5rem] card-shadow border border-white space-y-5">
+                                    <div className="flex bg-slate-100 p-1 rounded-2xl">
+                                        <select name="type" className="w-full bg-transparent p-3 font-bold text-center border-none appearance-none">
+                                            <option value="병원동행">병원 동행</option>
+                                            <option value="인력이동">인력 이동</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <select name="provider" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none appearance-none">
+                                            <option value="">수행 인력 선택</option>
+                                            {staffs.map((s,i)=><option key={i} value={s.name}>{s.name} ({s.role})</option>)}
+                                        </select>
+                                        <select name="targetName" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-blue-600 border-none appearance-none">
+                                            <option value="">대상자 선택</option>
+                                            {[...elders, ...workers].map((e,i)=><option key={i} value={e.name}>{e.name}</option>)}
+                                        </select>
+                                        <div className="grid grid-cols-1 gap-4">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-400 ml-2 uppercase">방문 일자</label>
+                                                <input type="date" name="date" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-400 ml-2 uppercase">목적지</label>
+                                                <input name="destination" placeholder="장소명 입력" required className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none" />
+                                            </div>
+                                        </div>
+                                        <input name="purpose" placeholder="비고 (선택사항)" className="w-full p-4 bg-slate-50 rounded-2xl border-none" />
+                                    </div>
                                 </div>
-                                <div className="bg-slate-900 p-6 rounded-[2.5rem] grid grid-cols-2 gap-4">
-                                    <input type="number" name="start" placeholder="출발(km)" required className="bg-slate-800 text-white p-4 rounded-xl border-none font-bold" />
-                                    <input type="number" name="end" placeholder="도착(km)" required className="bg-slate-800 text-white p-4 rounded-xl border-none font-bold" />
+                                <div className="bg-slate-900 p-7 rounded-[2.5rem] grid grid-cols-2 gap-4 shadow-xl">
+                                    <input type="number" name="start" placeholder="출발(km)" required className="bg-slate-800 text-white p-4 rounded-xl border-none font-bold placeholder:text-slate-600" />
+                                    <input type="number" name="end" placeholder="도착(km)" required className="bg-slate-800 text-white p-4 rounded-xl border-none font-bold placeholder:text-slate-600" />
                                 </div>
-                                <button type="submit" className="w-full btn-gradient text-white py-5 rounded-[2rem] font-black text-lg shadow-lg shadow-blue-200">기록 저장</button>
+                                <button type="submit" className="w-full btn-gradient text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-blue-200">기록 완료</button>
                             </form>
                         </div>
                     )}
 
+                    {/* 자원 관리 (스테프/보호사/어르신) */}
                     {activeTab === 'manage' && (
-                        <div className="p-6 space-y-4">
-                            <h2 className="text-xl font-black">인원 관리</h2>
-                            <p className="text-xs text-slate-400">데이터가 비어있다면 우측 상단 동기화 버튼을 누르세요.</p>
-                            {['staffs','workers','elders'].map(cat => (
-                                <div key={cat} className="space-y-2">
-                                    <p className="text-[10px] font-black text-blue-500 uppercase mt-4">{cat}</p>
-                                    {(cat==='staffs'?staffs:cat==='workers'?workers:elders).map((p,i)=>(
-                                        <div key={i} className="bg-white p-4 rounded-2xl shadow-sm flex justify-between items-center">
-                                            <span className="font-bold">{p.name}</span>
-                                            <a href={`tel:${p.phone}`} className="text-emerald-500"><i className="fas fa-phone-alt"></i></a>
+                        <div className="p-6 animate-in fade-in duration-500">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-2xl font-black">인원 관리</h2>
+                                <button onClick={() => setShowAddForm(!showAddForm)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${showAddForm ? 'bg-slate-800 text-white rotate-45' : 'bg-white text-blue-600 card-shadow'}`}>
+                                    <i className="fas fa-plus"></i>
+                                </button>
+                            </div>
+
+                            {/* 서브 탭 */}
+                            <div className="flex bg-slate-200/50 p-1 rounded-2xl mb-6">
+                                {['staffs', 'workers', 'elders'].map(tab => (
+                                    <button key={tab} onClick={() => {setManageSubTab(tab); setShowAddForm(false);}} className={`flex-1 py-3 rounded-xl text-[11px] font-bold transition-all ${manageSubTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>
+                                        {tab === 'staffs' ? '스테프' : tab === 'workers' ? '보호사' : '어르신'}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* 등록 폼 */}
+                            {showAddForm && (
+                                <form onSubmit={handleAddPerson} className="bg-white p-6 rounded-[2.5rem] card-shadow border border-white mb-8 space-y-4 animate-in slide-in-from-top-5">
+                                    <p className="text-[10px] font-black text-blue-600 uppercase text-center mb-2">{manageSubTab} 신규 등록</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <input name="name" placeholder="이름" required className="bg-slate-50 p-4 rounded-2xl border-none font-bold" />
+                                        <select name="gender" className="bg-slate-50 p-4 rounded-2xl border-none font-bold">
+                                            <option value="남">남성</option>
+                                            <option value="여">여성</option>
+                                        </select>
+                                    </div>
+                                    <input name="phone" placeholder="연락처 (- 포함)" required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold" />
+                                    <input name="birth" type="date" required className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold text-slate-400" />
+                                    <input name="role" placeholder="직함/역할 (예: 요양보호사)" className="w-full bg-slate-50 p-4 rounded-2xl border-none font-bold" />
+                                    <button className="w-full btn-gradient text-white py-4 rounded-2xl font-black">정보 저장하기</button>
+                                </form>
+                            )}
+
+                            {/* 명단 출력 */}
+                            <div className="space-y-3">
+                                {(manageSubTab === 'staffs' ? staffs : manageSubTab === 'workers' ? workers : elders).map((p, i) => (
+                                    <div key={i} className="bg-white p-5 rounded-[2rem] flex justify-between items-center card-shadow border border-white">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-11 h-11 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-bold text-xs uppercase">{p.name[0]}</div>
+                                            <div>
+                                                <p className="font-bold text-slate-800 text-sm">{p.name} <span className="text-[10px] font-normal text-slate-400">({p.gender})</span></p>
+                                                <p className="text-[11px] text-blue-600 font-bold">{p.phone}</p>
+                                            </div>
                                         </div>
-                                    ))}
-                                </div>
-                            ))}
+                                        <a href={`tel:${p.phone}`} className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center"><i className="fas fa-phone-alt"></i></a>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
 
-                    {/* Bottom Nav */}
-                    <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t flex justify-around p-4 rounded-t-[2rem]">
-                        <button onClick={()=>setActiveTab('home')} className={activeTab==='home'?'text-blue-600':'text-slate-300'}><i className="fas fa-home text-xl"></i></button>
-                        <button onClick={()=>setActiveTab('record')} className="bg-blue-600 text-white w-12 h-12 rounded-2xl flex items-center justify-center -translate-y-8 shadow-lg shadow-blue-200"><i className="fas fa-plus"></i></button>
-                        <button onClick={()=>setActiveTab('manage')} className={activeTab==='manage'?'text-blue-600':'text-slate-300'}><i className="fas fa-users text-xl"></i></button>
+                    {/* 하단 내비게이션 */}
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-100 flex justify-around p-5 rounded-t-[2.5rem] z-50">
+                        <button onClick={() => setActiveTab('home')} className={`text-xl ${activeTab === 'home' ? 'text-blue-600' : 'text-slate-300'}`}><i className="fas fa-home"></i></button>
+                        <button onClick={() => setActiveTab('record')} className="bg-blue-600 text-white w-14 h-14 rounded-2xl flex items-center justify-center -translate-y-10 shadow-xl shadow-blue-200 active:scale-90 transition-transform"><i className="fas fa-plus text-xl"></i></button>
+                        <button onClick={() => setActiveTab('manage')} className={`text-xl ${activeTab === 'manage' ? 'text-blue-600' : 'text-slate-300'}`}><i className="fas fa-users"></i></button>
                     </nav>
 
-                    {toast.show && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-2 rounded-full text-xs font-bold z-50 animate-bounce">{toast.msg}</div>}
+                    {/* 토스트 알림 */}
+                    {toast.show && <div className="fixed bottom-28 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full text-xs font-bold z-[100] animate-bounce shadow-2xl">{toast.msg}</div>}
                 </div>
             );
         }
