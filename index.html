@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>365 안심돌봄 통합버전 v18.0</title>
+    <title>365 안심돌봄 통합버전 v18.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -25,7 +25,6 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback } = React;
 
-        // 최종 업데이트된 웹 앱 URL
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzR7ZP1-I40Nk0QRFEM50IcfTuPGwAgND5sl0YIuIsiYZKSaLsZPEV4XYlYdqbl7Ma4/exec";
 
         function App() {
@@ -45,7 +44,8 @@
             const [showClearConfirm, setShowClearConfirm] = useState(false);
 
             // Form States
-            const [recordType, setRecordType] = useState('차량운행'); // 병원동행, 인력이동, 차량운행
+            const [recordType, setRecordType] = useState('차량운행'); 
+            const [selectedCar, setSelectedCar] = useState(''); // 선택된 차량 상태 관리
             const [photoPreview, setPhotoPreview] = useState(null);
             const [photoBase64, setPhotoBase64] = useState(null);
             const [startDist, setStartDist] = useState('');
@@ -65,7 +65,6 @@
                 setTimeout(() => setToast({ show: false }), 2000);
             };
 
-            // 데이터 동기화
             const syncData = useCallback(async () => {
                 if (!GOOGLE_SCRIPT_URL.startsWith("http")) return;
                 setIsSyncing(true);
@@ -90,7 +89,6 @@
 
             useEffect(() => { syncData(); }, [syncData]);
 
-            // 기기 데이터 초기화 함수 (자체 모달용)
             const executeClearData = () => {
                 localStorage.clear();
                 setStaffs([]);
@@ -101,11 +99,10 @@
                 setShowClearConfirm(false);
                 showToast("기록 삭제 및 초기화 중...");
                 setTimeout(() => {
-                    syncData(); // 초기화 후 바로 동기화 실행
+                    syncData(); 
                 }, 500);
             };
 
-            // 오류 토글
             const toggleError = async (index) => {
                 const newLogs = [...logs];
                 const targetLog = newLogs[index];
@@ -132,7 +129,6 @@
                 }
             };
 
-            // 인원/차량 DB 추가 기능
             const handleAddData = async (e) => {
                 e.preventDefault();
                 const fd = new FormData(e.target);
@@ -206,7 +202,25 @@
                 reader.readAsDataURL(file);
             };
 
-            // 기록 저장 (logs 시트로 전송)
+            // 🚗 차량 선택 시 이전 종료 거리 자동 불러오기 로직
+            const handleCarChange = (e) => {
+                const carName = e.target.value;
+                setSelectedCar(carName);
+
+                if (carName) {
+                    // logs 배열은 최신 기록이 앞에 있으므로(find), 가장 최근 기록을 찾습니다.
+                    const lastLog = logs.find(log => log.carName === carName && log.endDist > 0 && !log.isError);
+                    if (lastLog) {
+                        setStartDist(lastLog.endDist.toString());
+                        showToast(`${carName.split('(')[0]}의 이전 종료거리를 불러왔습니다.`);
+                    } else {
+                        setStartDist(''); // 이전 기록이 없을 경우 비움
+                    }
+                } else {
+                    setStartDist('');
+                }
+            };
+
             const saveLog = async (e) => {
                 e.preventDefault();
                 const fd = new FormData(e.target);
@@ -214,7 +228,7 @@
                 const end = Number(endDist) || 0;
                 const distance = end - start;
 
-                if (recordType === '차량운행' && distance < 0) {
+                if (selectedCar && distance < 0) {
                     showToast("종료 거리가 시작보다 작을 수 없습니다.");
                     return;
                 }
@@ -222,21 +236,20 @@
                 const data = {
                     sheetName: 'logs',
                     type: recordType,
-                    carName: fd.get('carName') || '',
+                    carName: selectedCar, // 선택된 차량 상태 사용
                     date: fd.get('date'),
                     targetName: fd.get('targetName') || '없음',
                     provider: fd.get('provider'),
                     destination: fd.get('destination'),
                     purpose: fd.get('purpose') || '-',
-                    dist: distance,
-                    startDist: start,
-                    endDist: end,
+                    dist: selectedCar ? distance : 0, // 차량이 없으면 거리는 0
+                    startDist: selectedCar ? start : 0,
+                    endDist: selectedCar ? end : 0,
                     isError: false,
                     photo: photoBase64,
-                    photoUrl: photoPreview // 로컬 화면 렌더링용
+                    photoUrl: photoPreview 
                 };
                 
-                // 화면 즉시 반영
                 setLogs([data, ...logs]);
                 showToast("기록 업로드 중...");
                 
@@ -249,8 +262,10 @@
                     });
                     
                     setActiveTab('home');
+                    // 폼 초기화
                     setStartDist('');
                     setEndDist('');
+                    setSelectedCar('');
                     setPhotoBase64(null);
                     setPhotoPreview(null);
                 } catch (err) {
@@ -342,10 +357,15 @@
                                     </div>
 
                                     <div className="space-y-4">
-                                        {/* 모든 탭에서 차량 선택 가능하도록 함 */}
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-bold text-slate-400 ml-2 uppercase tracking-tighter">이용 차량 (선택)</label>
-                                            <select name="carName" required={recordType === '차량운행'} className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none appearance-none text-slate-800">
+                                            <select 
+                                                name="carName" 
+                                                value={selectedCar} 
+                                                onChange={handleCarChange} 
+                                                required={recordType === '차량운행'} 
+                                                className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none appearance-none text-slate-800"
+                                            >
                                                 <option value="">차량 이용 안함 / 해당 없음</option>
                                                 {vehicles.map((v, i) => {
                                                     const displayName = v.carNumber ? `${v.name} (${v.carNumber})` : v.name;
@@ -408,23 +428,24 @@
                                     </div>
                                 </div>
 
-                                {/* 거리 계산기 */}
+                                {/* 거리 계산기 (차량이 선택된 경우에만 활성화 처리) */}
                                 <div className="bg-slate-900 p-7 rounded-[2.5rem] shadow-xl space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-1">
                                             <span className="text-[9px] text-slate-500 font-bold ml-1 uppercase tracking-wider">시작 거리(km)</span>
-                                            <input type="number" value={startDist} onChange={(e)=>setStartDist(e.target.value)} placeholder="0" className="w-full bg-slate-800 text-white p-4 rounded-xl border-none font-bold text-center text-lg focus:ring-2 focus:ring-blue-500" />
+                                            <input type="number" value={startDist} onChange={(e)=>setStartDist(e.target.value)} placeholder="0" disabled={!selectedCar} className="w-full bg-slate-800 text-white p-4 rounded-xl border-none font-bold text-center text-lg focus:ring-2 focus:ring-blue-500 disabled:opacity-50" />
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-[9px] text-slate-500 font-bold ml-1 uppercase tracking-wider">종료 거리(km)</span>
-                                            <input type="number" value={endDist} onChange={(e)=>setEndDist(e.target.value)} placeholder="0" className="w-full bg-slate-800 text-white p-4 rounded-xl border-none font-bold text-center text-lg focus:ring-2 focus:ring-blue-500" />
+                                            <input type="number" value={endDist} onChange={(e)=>setEndDist(e.target.value)} placeholder="0" disabled={!selectedCar} className="w-full bg-slate-800 text-white p-4 rounded-xl border-none font-bold text-center text-lg focus:ring-2 focus:ring-blue-500 disabled:opacity-50" />
                                         </div>
                                     </div>
                                     <div className="pt-2 text-center border-t border-slate-800">
                                         <p className="text-slate-500 text-[10px] font-bold uppercase mb-1">총 주행거리</p>
                                         <p className="text-3xl font-black text-blue-400">
-                                            { (Number(endDist) - Number(startDist)) > 0 ? (Number(endDist) - Number(startDist)) : 0 } <span className="text-sm">km</span>
+                                            { selectedCar && (Number(endDist) - Number(startDist)) > 0 ? (Number(endDist) - Number(startDist)) : 0 } <span className="text-sm">km</span>
                                         </p>
+                                        {!selectedCar && <p className="text-[10px] text-slate-500 mt-1">차량을 선택하면 입력할 수 있습니다.</p>}
                                     </div>
                                 </div>
 
