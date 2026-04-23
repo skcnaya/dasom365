@@ -25,7 +25,8 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback } = React;
 
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbycZ8jnao0BW7YbRgkSko4jFn1N9ydQ4-wc5yTUOzjIoZ4XPy92KqFK21sWkUY_VcUqcQ/exec";
+        // 최종 업데이트된 웹 앱 URL
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzR7ZP1-I40Nk0QRFEM50IcfTuPGwAgND5sl0YIuIsiYZKSaLsZPEV4XYlYdqbl7Ma4/exec";
 
         function App() {
             // DB States
@@ -41,6 +42,7 @@
             const [showAddForm, setShowAddForm] = useState(false);
             const [isSyncing, setIsSyncing] = useState(false);
             const [toast, setToast] = useState({ show: false, msg: '' });
+            const [showClearConfirm, setShowClearConfirm] = useState(false);
 
             // Form States
             const [recordType, setRecordType] = useState('차량운행'); // 병원동행, 인력이동, 차량운행
@@ -48,22 +50,6 @@
             const [photoBase64, setPhotoBase64] = useState(null);
             const [startDist, setStartDist] = useState('');
             const [endDist, setEndDist] = useState('');
-            const [showClearConfirm, setShowClearConfirm] = useState(false); // 모달 표시용 상태 추가
-
-            // 로컬 스토리지 데이터 완전 초기화 함수 (모달 방식으로 수정)
-            const executeClearData = () => {
-                localStorage.clear();
-                setStaffs([]);
-                setWorkers([]);
-                setElders([]);
-                setVehicles([]);
-                setLogs([]);
-                setShowClearConfirm(false);
-                showToast("기록 삭제 및 초기화 중...");
-                setTimeout(() => {
-                    syncData(); // 초기화 후 바로 동기화 실행
-                }, 500);
-            };
 
             // 로컬 스토리지 동기화
             useEffect(() => {
@@ -79,6 +65,7 @@
                 setTimeout(() => setToast({ show: false }), 2000);
             };
 
+            // 데이터 동기화
             const syncData = useCallback(async () => {
                 if (!GOOGLE_SCRIPT_URL.startsWith("http")) return;
                 setIsSyncing(true);
@@ -102,6 +89,21 @@
             }, []);
 
             useEffect(() => { syncData(); }, [syncData]);
+
+            // 기기 데이터 초기화 함수 (자체 모달용)
+            const executeClearData = () => {
+                localStorage.clear();
+                setStaffs([]);
+                setWorkers([]);
+                setElders([]);
+                setVehicles([]);
+                setLogs([]);
+                setShowClearConfirm(false);
+                showToast("기록 삭제 및 초기화 중...");
+                setTimeout(() => {
+                    syncData(); // 초기화 후 바로 동기화 실행
+                }, 500);
+            };
 
             // 오류 토글
             const toggleError = async (index) => {
@@ -212,7 +214,7 @@
                 const end = Number(endDist) || 0;
                 const distance = end - start;
 
-                if (distance < 0) {
+                if (recordType === '차량운행' && distance < 0) {
                     showToast("종료 거리가 시작보다 작을 수 없습니다.");
                     return;
                 }
@@ -298,7 +300,7 @@
                                                 </div>
                                             </div>
                                             <div className="flex flex-col items-end gap-1 shrink-0">
-                                                <p className="text-xs font-black text-blue-600">+{l.dist}km</p>
+                                                {l.dist > 0 && <p className="text-xs font-black text-blue-600">+{l.dist}km</p>}
                                                 <button 
                                                     onClick={() => toggleError(i)} 
                                                     className={`text-[9px] px-2 py-1 rounded-md font-bold transition-colors mt-1 ${l.isError ? 'bg-slate-200 text-slate-500' : 'bg-red-50 text-red-500 hover:bg-red-100'}`}
@@ -340,9 +342,10 @@
                                     </div>
 
                                     <div className="space-y-4">
+                                        {/* 모든 탭에서 차량 선택 가능하도록 함 */}
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-bold text-slate-400 ml-2 uppercase tracking-tighter">이용 차량 (선택)</label>
-                                            <select name="carName" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none appearance-none text-slate-800">
+                                            <select name="carName" required={recordType === '차량운행'} className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none appearance-none text-slate-800">
                                                 <option value="">차량 이용 안함 / 해당 없음</option>
                                                 {vehicles.map((v, i) => {
                                                     const displayName = v.carNumber ? `${v.name} (${v.carNumber})` : v.name;
@@ -410,11 +413,11 @@
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-1">
                                             <span className="text-[9px] text-slate-500 font-bold ml-1 uppercase tracking-wider">시작 거리(km)</span>
-                                            <input type="number" value={startDist} onChange={(e)=>setStartDist(e.target.value)} placeholder="0" required className="w-full bg-slate-800 text-white p-4 rounded-xl border-none font-bold text-center text-lg focus:ring-2 focus:ring-blue-500" />
+                                            <input type="number" value={startDist} onChange={(e)=>setStartDist(e.target.value)} placeholder="0" className="w-full bg-slate-800 text-white p-4 rounded-xl border-none font-bold text-center text-lg focus:ring-2 focus:ring-blue-500" />
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-[9px] text-slate-500 font-bold ml-1 uppercase tracking-wider">종료 거리(km)</span>
-                                            <input type="number" value={endDist} onChange={(e)=>setEndDist(e.target.value)} placeholder="0" required className="w-full bg-slate-800 text-white p-4 rounded-xl border-none font-bold text-center text-lg focus:ring-2 focus:ring-blue-500" />
+                                            <input type="number" value={endDist} onChange={(e)=>setEndDist(e.target.value)} placeholder="0" className="w-full bg-slate-800 text-white p-4 rounded-xl border-none font-bold text-center text-lg focus:ring-2 focus:ring-blue-500" />
                                         </div>
                                     </div>
                                     <div className="pt-2 text-center border-t border-slate-800">
